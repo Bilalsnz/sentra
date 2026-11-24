@@ -1,0 +1,33 @@
+name: uuid dependency investigation
+
+on:
+  push:
+    branches: [security/uuid-audit]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install and inspect UUID dependency paths
+        working-directory: web
+        run: |
+          npm ci
+          npm ls uuid --all || true
+          npm explain uuid || true
+          npm audit --json > audit.json || true
+          node -e "const a=require('./audit.json'); console.log(JSON.stringify({metadata:a.metadata?.vulnerabilities, uuid:a.vulnerabilities?.uuid},null,2))"
+      - name: Web checks
+        working-directory: web
+        run: |
+          npm run typecheck
+          npm run build
