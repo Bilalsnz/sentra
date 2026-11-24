@@ -31,8 +31,10 @@ contract DeployRegistry is Script {
         string memory json = vm.serializeAddress("sentra", "registry", address(registry));
         json = vm.serializeAddress("sentra", "agentId", agentId);
         json = vm.serializeUint("sentra", "chainId", block.chainid);
+        string memory directory = string.concat(vm.projectRoot(), "/deployments");
+        vm.createDir(directory, true);
         string memory path = string.concat(
-            vm.projectRoot(), "/deployments/", vm.toString(block.chainid), "-registry.json"
+            directory, "/", vm.toString(block.chainid), "-registry.json"
         );
         vm.writeJson(json, path);
     }
