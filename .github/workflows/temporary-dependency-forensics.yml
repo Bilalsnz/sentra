@@ -29,8 +29,8 @@ jobs:
           node -e 'const t=require("./selected-tree.json"); function walk(d,p=""){for(const [n,v] of Object.entries(d.dependencies||{})){console.log(p+n+"@"+(v.version||"?"));walk(v,p+n+">")}} walk(t)'
       - name: Safe audit fix dry run and package metadata
         run: |
-          npm audit fix --dry-run --json > audit-fix-dry-run.json || true
-          node -e 'const a=require("./audit-fix-dry-run.json"); console.log(JSON.stringify({added:a.added,removed:a.removed,changed:a.changed,audit:a.audit?.metadata?.vulnerabilities||a.metadata?.vulnerabilities},null,2))'
+          npm audit fix --dry-run > audit-fix-dry-run.txt 2>&1 || true
+          sed -n "1,160p" audit-fix-dry-run.txt
           for p in "wagmi@2.19.5" "@wagmi/connectors@6.2.0" "@walletconnect/utils@2.21.0" "@walletconnect/utils@2.21.1" "@reown/appkit@1.7.8" "viem@2.23.2" "decode-uri-component" "query-string" "uuid" "ws" "zod"; do
             echo "===== npm view $p version dependencies ====="
             npm view "$p" version dependencies --json || true
