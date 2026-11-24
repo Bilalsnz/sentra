@@ -1,0 +1,54 @@
+name: targeted-dependency-test
+on:
+  push:
+    branches:
+      - "security/decode-uri-component-test"
+    paths:
+      - "web/package.json"
+      - ".github/workflows/targeted-dependency-test.yml"
+permissions:
+  contents: write
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Regenerate lockfile
+        working-directory: web
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Install from regenerated lockfile
+        working-directory: web
+        run: npm ci
+      - name: Audit production and full tree
+        working-directory: web
+        run: |
+          npm audit --omit=dev --json > production-audit.json || true
+          npm audit --json > full-audit.json || true
+          node - <<'NODE'
+          for (const f of ["production-audit.json","full-audit.json"]) {
+            const a=require("./"+f);
+            console.log(f, JSON.stringify(a.metadata?.vulnerabilities));
+            for (const [name,v] of Object.entries(a.vulnerabilities||{})) {
+              console.log(JSON.stringify({name,severity:v.severity,nodes:v.nodes,fixAvailable:v.fixAvailable}));
+            }
+          }
+          NODE
+      - name: Typecheck and production build
+        working-directory: web
+        run: |
+          npm run typecheck
+          npm run build
+      - name: Save regenerated lockfile on test branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m "test: lock targeted dependency override"
+            git push
+          fi
