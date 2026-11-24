@@ -1,0 +1,48 @@
+name: temporary-dependency-forensics
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/temporary-dependency-forensics.yml"
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Exact dependency paths and versions
+        run: |
+          for p in wagmi @wagmi/connectors @walletconnect/core @walletconnect/ethereum-provider @walletconnect/sign-client @walletconnect/universal-provider @walletconnect/utils @reown/appkit @metamask/sdk @metamask/utils @gemini-wallet/core @coinbase/cdp-sdk viem abitype decode-uri-component query-string uuid ws zod; do
+            echo "===== npm explain $p ====="
+            npm explain "$p" || true
+          done
+          echo "===== npm ls selected ====="
+          npm ls --all --json wagmi @wagmi/connectors @walletconnect/core @walletconnect/ethereum-provider @walletconnect/sign-client @walletconnect/universal-provider @walletconnect/utils @reown/appkit @metamask/sdk @metamask/utils @gemini-wallet/core @coinbase/cdp-sdk viem abitype decode-uri-component query-string uuid ws zod > selected-tree.json || true
+          node -e 'const t=require("./selected-tree.json"); function walk(d,p=""){for(const [n,v] of Object.entries(d.dependencies||{})){console.log(p+n+"@"+(v.version||"?"));walk(v,p+n+">")}} walk(t)'
+      - name: Full audit nodes and advisory paths
+        run: |
+          npm audit --json > audit.json || true
+          node - <<'NODE'
+          const a=require("./audit.json");
+          for(const [name,v] of Object.entries(a.vulnerabilities||{})){
+            console.log(JSON.stringify({name,severity:v.severity,range:v.range,nodes:v.nodes,fixAvailable:v.fixAvailable,via:v.via.map(x=>typeof x==="string"?x:{title:x.title,range:x.range,url:x.url})}));
+          }
+          NODE
+      - name: Production bundle reachability scan
+        run: |
+          npm run build
+          echo "===== source imports ====="
+          grep -RInE 'wagmi|@wagmi/core|@wagmi/connectors|walletconnect|reown|metamask|coinbase|gemini|viem|zod' src || true
+          echo "===== package names found in emitted bundles ====="
+          for p in decode-uri-component query-string uuid ws @walletconnect @reown @metamask @coinbase @gemini zod viem; do
+            count=$(grep -RIl --exclude='*.map' "$p" .next/static .next/server 2>/dev/null | wc -l)
+            echo "$p: $count emitted files"
+          done
