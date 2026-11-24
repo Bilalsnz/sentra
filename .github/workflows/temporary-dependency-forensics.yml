@@ -54,3 +54,5 @@ jobs:
             echo "--- $p ---"
             grep -RIl --exclude='*.map' "$p" .next/static .next/server 2>/dev/null | head -20 || true
           done
+
+# rerun after targeted decoder override
