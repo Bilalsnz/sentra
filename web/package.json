@@ -31,7 +31,8 @@
     "@walletconnect/utils": {
       "query-string": {
         "decode-uri-component": "0.5.1"
-      }
+      },
+      "viem": "2.58.6"
     }
   }
 }
