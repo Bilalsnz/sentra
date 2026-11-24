@@ -281,8 +281,8 @@ allow for drop-off.
 | Contracts + tests | Complete; 25 Foundry tests pass |
 | Sandbox contracts + deploy scripts | Complete |
 | MCP server + skill | Complete; 23 tests pass and a mainnet stdio smoke test passes |
-| Web scanner + queue + integration | Complete in source; local build pending |
-| Deployment + BscScan verification | Operator step |
+| Web scanner + queue + integration | Complete in source; CI typecheck and production build pass |
+| Dependency security | Targeted same-major fixes applied; remaining transitive wallet-connector advisories documented in `SECURITY.md` |\n| Deployment + BscScan verification | Deployment phase (testnet first) |
 | Recruitment + submission | Pending |
 
 ## Disclaimer
