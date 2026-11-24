@@ -1,6 +1,6 @@
 import { cookieStorage, createConfig, createStorage, http } from "wagmi";
 import { bsc, bscTestnet } from "wagmi/chains";
-import { injected } from "wagmi/connectors";
+import { injected } from "@wagmi/core";
 
 export const CHAIN_ID = Number(process.env.NEXT_PUBLIC_SENTRA_CHAIN_ID ?? "56");
 
