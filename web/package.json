@@ -32,6 +32,7 @@
       "query-string": {
         "decode-uri-component": "0.5.1"
       }
-    }
+    },
+    "viem": "$viem"
   }
 }
