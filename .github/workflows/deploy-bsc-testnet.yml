@@ -1,0 +1,90 @@
+name: deploy-bsc-testnet
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_deployment:
+        description: "Explicitly confirm deployment to BNB Smart Chain TESTNET (chain 97)"
+        required: true
+        type: choice
+        default: "NO"
+        options:
+          - "NO"
+          - "YES_DEPLOY_TO_BSC_TESTNET"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy Sentra contracts to BSC testnet
+    if: ${{ inputs.confirm_deployment == 'YES_DEPLOY_TO_BSC_TESTNET' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Validate required secrets and network
+        env:
+          BSC_TESTNET_RPC_URL: ${{ secrets.BSC_TESTNET_RPC_URL }}
+          PRIVATE_KEY: ${{ secrets.SENTRA_TESTNET_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$BSC_TESTNET_RPC_URL" || { echo "Missing BSC_TESTNET_RPC_URL repository secret"; exit 1; }
+          test -n "$PRIVATE_KEY" || { echo "Missing SENTRA_TESTNET_PRIVATE_KEY repository secret"; exit 1; }
+          CHAIN_ID="$(cast chain-id --rpc-url "$BSC_TESTNET_RPC_URL")"
+          echo "Connected chain ID: $CHAIN_ID"
+          test "$CHAIN_ID" = "97" || { echo "Refusing to deploy: expected BSC testnet chain 97"; exit 1; }
+
+      - name: Build and test contracts
+        run: |
+          forge fmt --check
+          forge build --sizes
+          forge test -vvv
+
+      - name: Deploy testnet Mock Agent ID
+        env:
+          BSC_TESTNET_RPC_URL: ${{ secrets.BSC_TESTNET_RPC_URL }}
+          PRIVATE_KEY: ${{ secrets.SENTRA_TESTNET_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          forge script script/DeployMockAgentID.s.sol:DeployMockAgentID \
+            --rpc-url "$BSC_TESTNET_RPC_URL" --broadcast
+
+      - name: Deploy Sentra Registry using the testnet mock
+        env:
+          BSC_TESTNET_RPC_URL: ${{ secrets.BSC_TESTNET_RPC_URL }}
+          PRIVATE_KEY: ${{ secrets.SENTRA_TESTNET_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          MOCK_AGENT_ID="$(jq -r '.address' deployments/97-mock-agent-id.json)"
+          test -n "$MOCK_AGENT_ID" && test "$MOCK_AGENT_ID" != "null"
+          export AGENT_ID="$MOCK_AGENT_ID"
+          forge script script/DeployRegistry.s.sol:DeployRegistry \
+            --rpc-url "$BSC_TESTNET_RPC_URL" --broadcast
+
+      - name: Deploy Sentra sandbox contracts
+        env:
+          BSC_TESTNET_RPC_URL: ${{ secrets.BSC_TESTNET_RPC_URL }}
+          PRIVATE_KEY: ${{ secrets.SENTRA_TESTNET_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          forge script script/DeploySandboxes.s.sol:DeploySandboxes \
+            --rpc-url "$BSC_TESTNET_RPC_URL" --broadcast
+
+      - name: Publish deployment addresses
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentra-bsc-testnet-deployment
+          path: contracts/deployments/*.json
+          if-no-files-found: error
+          retention-days: 90
