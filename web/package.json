@@ -26,5 +26,12 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "overrides": {
+    "@walletconnect/utils": {
+      "query-string": {
+        "decode-uri-component": "0.5.1"
+      }
+    }
   }
 }
