@@ -6,6 +6,7 @@ import { SandboxCleanVault } from "../src/sandbox/SandboxCleanVault.sol";
 import { SandboxApprovalTrap } from "../src/sandbox/SandboxApprovalTrap.sol";
 import { SandboxHoneypotRouter } from "../src/sandbox/SandboxHoneypotRouter.sol";
 
+/// @notice Deploy intentionally educational sandbox contracts to BSC testnet only.
 contract DeploySandboxes is Script {
     function run()
         external
@@ -15,6 +16,8 @@ contract DeploySandboxes is Script {
             SandboxHoneypotRouter honeypotRouter
         )
     {
+        require(block.chainid == 97, "Sandbox contracts are testnet-only (chain 97)");
+
         vm.startBroadcast();
         cleanVault = new SandboxCleanVault();
         approvalTrap = new SandboxApprovalTrap();
@@ -30,8 +33,10 @@ contract DeploySandboxes is Script {
         json = vm.serializeAddress("sandboxes", "approvalTrap", address(approvalTrap));
         json = vm.serializeAddress("sandboxes", "honeypotRouter", address(honeypotRouter));
         json = vm.serializeUint("sandboxes", "chainId", block.chainid);
+        string memory directory = string.concat(vm.projectRoot(), "/deployments");
+        vm.createDir(directory, true);
         string memory path = string.concat(
-            vm.projectRoot(), "/deployments/", vm.toString(block.chainid), "-sandboxes.json"
+            directory, "/", vm.toString(block.chainid), "-sandboxes.json"
         );
         vm.writeJson(json, path);
     }
