@@ -189,46 +189,64 @@ The Foundry project reads `forge-std` from the repository-level `lib/` directory
 
 ## Deployment (operator steps)
 
-Deployment is intentionally left to the operator. Use a dedicated funded deployer key and
-never commit it.
+Deployment is intentionally signed by the operator. Use a dedicated deployer wallet and
+never paste or commit its private key. The assistant cannot sign transactions for you.
 
-### 1. Testnet first
+### 1. Deploy to BNB Smart Chain Testnet first
+
+Network: chain ID `97`, currency `tBNB`, explorer
+[`testnet.bscscan.com`](https://testnet.bscscan.com). Official RPC:
+`https://data-seed-prebsc-1-s1.bnbchain.org:8545`.
+
+From the repository root, open Termux and run:
 
 ```sh
-cd contracts
-export BSC_RPC_URL=https://data-seed-prebsc-1-s1.binance.org:8545
-export PRIVATE_KEY=0x...
-export BSCSCAN_API_KEY=...
+cd sentra/contracts
+export BSC_RPC_URL=https://data-seed-prebsc-1-s1.bnbchain.org:8545
+export PRIVATE_KEY=YOUR_TESTNET_DEPLOYER_PRIVATE_KEY
 
-forge script script/DeploySandboxes.s.sol \
-  --rpc-url $BSC_RPC_URL --broadcast --verify --etherscan-api-key $BSCSCAN_API_KEY
+# 1) Deploy a test-only Agent ID mock. Save the printed address.
+forge script script/DeployMockAgentID.s.sol --rpc-url "$BSC_RPC_URL" --broadcast
 
-forge script script/DeployRegistry.s.sol \
-  --rpc-url $BSC_RPC_URL --broadcast --verify --etherscan-api-key $BSCSCAN_API_KEY
+# 2) Set AGENT_ID to the MockAgentID address printed above.
+export AGENT_ID=0xYOUR_DEPLOYED_MOCK_ADDRESS
+
+# 3) Deploy the registry against that mock, not the mainnet Agent ID.
+forge script script/DeployRegistry.s.sol --rpc-url "$BSC_RPC_URL" --broadcast
+
+# 4) Deploy the three labeled sandbox targets.
+forge script script/DeploySandboxes.s.sol --rpc-url "$BSC_RPC_URL" --broadcast
 ```
+
+The mock has an owner-only `mint(address)` function so test wallets can be given test
+eligibility. It is strictly for testnet and must never be used in a mainnet deployment.
+The registry deploy script refuses to silently use the mainnet Agent ID address on testnet
+and checks that the configured Agent ID contract has code.
 
 Deployment records are written to `contracts/deployments/<chainId>-*.json`.
 
-### 2. Test with real wallets
+### 2. Verify testnet behavior
 
-- Run the full flow with 5+ real Agent ID wallets on testnet.
-- Confirm holder succeeds and non-holder reverts.
+- Mint test eligibility to test wallets by calling `mint(address)` on the testnet mock.
+- Confirm a minted wallet can attest and a non-minted wallet is rejected.
 - Confirm duplicate attestations revert.
 - Confirm the public counter increments once per wallet.
-- Confirm the web queue and MCP output against the deployed registry.
+- Point the web app and MCP server at the testnet registry and sandbox addresses.
 
-### 3. Mainnet
+### 3. Mainnet (only after testnet validation)
+
+Use BNB Smart Chain mainnet (chain ID `56`) and the official Agent ID contract
+`0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F`. Do not set `AGENT_ID` to the mock.
+Mainnet deployment requires real BNB for gas and a separate explicit wallet confirmation.
 
 ```sh
-export BSC_RPC_URL=https://bsc-dataseed.binance.org
-forge script script/DeploySandboxes.s.sol \
-  --rpc-url $BSC_RPC_URL --broadcast --verify --etherscan-api-key $BSCSCAN_API_KEY
-forge script script/DeployRegistry.s.sol \
-  --rpc-url $BSC_RPC_URL --broadcast --verify --etherscan-api-key $BSCSCAN_API_KEY
+export BSC_RPC_URL=https://bsc-dataseed.bnbchain.org
+unset AGENT_ID
+forge script script/DeploySandboxes.s.sol --rpc-url "$BSC_RPC_URL" --broadcast
+forge script script/DeployRegistry.s.sol --rpc-url "$BSC_RPC_URL" --broadcast
 ```
 
 Then set:
-
 - `web/.env.local` → `NEXT_PUBLIC_SENTRA_REGISTRY`, `NEXT_PUBLIC_SANDBOX_*`
 - MCP environment → `SENTRA_REGISTRY`
 - Deployment links in this README and the submission form
