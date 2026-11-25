@@ -58,8 +58,18 @@ jobs:
         run: |
           set -euo pipefail
           DEPLOYER_ADDRESS="$(cast wallet address --private-key "$PRIVATE_KEY")"
+          BALANCE="$(cast balance "$DEPLOYER_ADDRESS" --rpc-url "$BSC_TESTNET_RPC_URL")"
+          echo "Deployer: $DEPLOYER_ADDRESS"
+          echo "Testnet balance (wei): $BALANCE"
+          test "$BALANCE" -gt 0 || { echo "Deployer has no tBNB for gas"; exit 1; }
           forge script script/DeployMockAgentID.s.sol:DeployMockAgentID \
-            --rpc-url "$BSC_TESTNET_RPC_URL" --sender "$DEPLOYER_ADDRESS" --broadcast
+            --rpc-url "$BSC_TESTNET_RPC_URL" --private-key "$PRIVATE_KEY" \
+            --sender "$DEPLOYER_ADDRESS" --broadcast
+          MOCK_AGENT_ID="$(jq -r '.address' deployments/97-mock-agent-id.json)"
+          test -n "$MOCK_AGENT_ID" && test "$MOCK_AGENT_ID" != "null"
+          MOCK_CODE="$(cast code "$MOCK_AGENT_ID" --rpc-url "$BSC_TESTNET_RPC_URL")"
+          test "$MOCK_CODE" != "0x" || { echo "Mock Agent ID has no on-chain bytecode"; exit 1; }
+          echo "Verified Mock Agent ID on-chain: $MOCK_AGENT_ID"
 
       - name: Deploy Sentra Registry using the testnet mock
         env:
@@ -72,7 +82,8 @@ jobs:
           export AGENT_ID="$MOCK_AGENT_ID"
           DEPLOYER_ADDRESS="$(cast wallet address --private-key "$PRIVATE_KEY")"
           forge script script/DeployRegistry.s.sol:DeployRegistry \
-            --rpc-url "$BSC_TESTNET_RPC_URL" --sender "$DEPLOYER_ADDRESS" --broadcast
+            --rpc-url "$BSC_TESTNET_RPC_URL" --private-key "$PRIVATE_KEY" \
+            --sender "$DEPLOYER_ADDRESS" --broadcast
 
       - name: Deploy Sentra sandbox contracts
         env:
@@ -82,7 +93,8 @@ jobs:
           set -euo pipefail
           DEPLOYER_ADDRESS="$(cast wallet address --private-key "$PRIVATE_KEY")"
           forge script script/DeploySandboxes.s.sol:DeploySandboxes \
-            --rpc-url "$BSC_TESTNET_RPC_URL" --sender "$DEPLOYER_ADDRESS" --broadcast
+            --rpc-url "$BSC_TESTNET_RPC_URL" --private-key "$PRIVATE_KEY" \
+            --sender "$DEPLOYER_ADDRESS" --broadcast
 
       - name: Publish deployment addresses
         uses: actions/upload-artifact@v4
