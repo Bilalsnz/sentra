@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { Metadata } from "next";
 import CopyButton from "@/components/CopyButton";
-import { REGISTRY_ADDRESS } from "@/lib/contracts";
+import { CHAIN_ID, REGISTRY_ADDRESS } from "@/lib/contracts";
 
 export const metadata: Metadata = {
   title: "Integration",
@@ -20,8 +20,11 @@ const mcpConfig = JSON.stringify(
         command: "node",
         args: ["/absolute/path/to/sentra/mcp-server/dist/index.js"],
         env: {
-          BSC_CHAIN_ID: "56",
-          BSC_RPC_URL: "https://bsc-dataseed.binance.org",
+          BSC_CHAIN_ID: String(CHAIN_ID),
+          BSC_RPC_URL:
+            CHAIN_ID === 97
+              ? "https://data-seed-prebsc-1-s1.bnbchain.org:8545"
+              : "https://bsc-dataseed.bnbchain.org",
           SENTRA_REGISTRY: REGISTRY_ADDRESS ?? "0x<deployed registry address>",
         },
       },
