@@ -35,9 +35,8 @@ contract DeploySandboxes is Script {
         json = vm.serializeUint("sandboxes", "chainId", block.chainid);
         string memory directory = string.concat(vm.projectRoot(), "/deployments");
         vm.createDir(directory, true);
-        string memory path = string.concat(
-            directory, "/", vm.toString(block.chainid), "-sandboxes.json"
-        );
+        string memory path =
+            string.concat(directory, "/", vm.toString(block.chainid), "-sandboxes.json");
         vm.writeJson(json, path);
     }
 }
