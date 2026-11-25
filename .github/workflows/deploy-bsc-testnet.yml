@@ -57,8 +57,9 @@ jobs:
           PRIVATE_KEY: ${{ secrets.SENTRA_TESTNET_PRIVATE_KEY }}
         run: |
           set -euo pipefail
+          DEPLOYER_ADDRESS="$(cast wallet address --private-key "$PRIVATE_KEY")"
           forge script script/DeployMockAgentID.s.sol:DeployMockAgentID \
-            --rpc-url "$BSC_TESTNET_RPC_URL" --broadcast
+            --rpc-url "$BSC_TESTNET_RPC_URL" --sender "$DEPLOYER_ADDRESS" --broadcast
 
       - name: Deploy Sentra Registry using the testnet mock
         env:
@@ -69,8 +70,9 @@ jobs:
           MOCK_AGENT_ID="$(jq -r '.address' deployments/97-mock-agent-id.json)"
           test -n "$MOCK_AGENT_ID" && test "$MOCK_AGENT_ID" != "null"
           export AGENT_ID="$MOCK_AGENT_ID"
+          DEPLOYER_ADDRESS="$(cast wallet address --private-key "$PRIVATE_KEY")"
           forge script script/DeployRegistry.s.sol:DeployRegistry \
-            --rpc-url "$BSC_TESTNET_RPC_URL" --broadcast
+            --rpc-url "$BSC_TESTNET_RPC_URL" --sender "$DEPLOYER_ADDRESS" --broadcast
 
       - name: Deploy Sentra sandbox contracts
         env:
@@ -78,8 +80,9 @@ jobs:
           PRIVATE_KEY: ${{ secrets.SENTRA_TESTNET_PRIVATE_KEY }}
         run: |
           set -euo pipefail
+          DEPLOYER_ADDRESS="$(cast wallet address --private-key "$PRIVATE_KEY")"
           forge script script/DeploySandboxes.s.sol:DeploySandboxes \
-            --rpc-url "$BSC_TESTNET_RPC_URL" --broadcast
+            --rpc-url "$BSC_TESTNET_RPC_URL" --sender "$DEPLOYER_ADDRESS" --broadcast
 
       - name: Publish deployment addresses
         uses: actions/upload-artifact@v4
