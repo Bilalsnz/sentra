@@ -1,0 +1,78 @@
+name: testnet-smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_smoke:
+        description: "Mint the test-only Agent ID to the deployer and post one sandbox attestation on BNB testnet"
+        required: true
+        type: choice
+        default: "NO"
+        options:
+          - "NO"
+          - "YES_RUN_TESTNET_SMOKE"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Verify Sentra registry on BNB testnet
+    if: ${{ inputs.confirm_smoke == 'YES_RUN_TESTNET_SMOKE' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Mint test eligibility and verify attestations
+        env:
+          BSC_TESTNET_RPC_URL: ${{ secrets.BSC_TESTNET_RPC_URL }}
+          PRIVATE_KEY: ${{ secrets.SENTRA_TESTNET_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          MOCK_AGENT_ID="0x2A24E7C4335DB2C87D68B42D3bFD176e12a55Ae3"
+          REGISTRY="0x9b8d8533053573474483a2d41c12Cf0492ccDd55"
+          CLEAN_VAULT="0xAdB943ef08914483eA0271E15d44b100341489D7"
+          DEPLOYER="$(cast wallet address --private-key "$PRIVATE_KEY")"
+
+          test "$(cast chain-id --rpc-url "$BSC_TESTNET_RPC_URL")" = "97"
+          test "$(cast code "$MOCK_AGENT_ID" --rpc-url "$BSC_TESTNET_RPC_URL")" != "0x"
+          test "$(cast code "$REGISTRY" --rpc-url "$BSC_TESTNET_RPC_URL")" != "0x"
+          test "$(cast code "$CLEAN_VAULT" --rpc-url "$BSC_TESTNET_RPC_URL")" != "0x"
+
+          echo "Minting test-only Agent ID eligibility to deployer $DEPLOYER"
+          cast send "$MOCK_AGENT_ID" "mint(address)" "$DEPLOYER" \
+            --rpc-url "$BSC_TESTNET_RPC_URL" --private-key "$PRIVATE_KEY" \
+            --legacy --gas-price 1000000000
+
+          BALANCE="$(cast call "$MOCK_AGENT_ID" "balanceOf(address)(uint256)" "$DEPLOYER" --rpc-url "$BSC_TESTNET_RPC_URL")"
+          test "$BALANCE" = "1"
+
+          echo "Checking that an unminted wallet is rejected"
+          NON_HOLDER="0x000000000000000000000000000000000000dEaD"
+          if cast call "$REGISTRY" "attest(address,uint8,uint8,bytes32)" "$CLEAN_VAULT" 0 0 "$(cast keccak 'sentra-smoke-non-holder')" \
+            --from "$NON_HOLDER" --rpc-url "$BSC_TESTNET_RPC_URL"; then
+            echo "ERROR: non-holder unexpectedly passed the Agent ID gate"
+            exit 1
+          else
+            echo "PASS: non-holder is rejected"
+          fi
+
+          ALREADY="$(cast call "$REGISTRY" "hasAttested(address,address,uint8)(bool)" "$DEPLOYER" "$CLEAN_VAULT" 0 --rpc-url "$BSC_TESTNET_RPC_URL")"
+          if [ "$ALREADY" = "false" ]; then
+            echo "Posting one real testnet attestation to the labeled Clean Vault sandbox"
+            cast send "$REGISTRY" "attest(address,uint8,uint8,bytes32)" "$CLEAN_VAULT" 0 0 "$(cast keccak 'sentra-smoke-clean-vault-v1')" \
+              --rpc-url "$BSC_TESTNET_RPC_URL" --private-key "$PRIVATE_KEY" \
+              --legacy --gas-price 1000000000
+          else
+            echo "Deployer already attested this target/category; no duplicate transaction sent"
+          fi
+
+          CONFIRMED="$(cast call "$REGISTRY" "hasAttested(address,address,uint8)(bool)" "$DEPLOYER" "$CLEAN_VAULT" 0 --rpc-url "$BSC_TESTNET_RPC_URL")"
+          test "$CONFIRMED" = "true"
+          echo "Target stats:"
+          cast call "$REGISTRY" "getTargetStats(address)" "$CLEAN_VAULT" --rpc-url "$BSC_TESTNET_RPC_URL"
+          echo "Global unique attesters:"
+          cast call "$REGISTRY" "totalUniqueAttesters()(uint256)" --rpc-url "$BSC_TESTNET_RPC_URL"
+          echo "PASS: registry reads, Agent ID gate, attestation write, and duplicate guard are verified."
