@@ -80,6 +80,23 @@ jobs:
           MOCK_AGENT_ID="$(jq -r '.address' deployments/97-mock-agent-id.json)"
           test -n "$MOCK_AGENT_ID" && test "$MOCK_AGENT_ID" != "null"
           export AGENT_ID="$MOCK_AGENT_ID"
+          echo "Checking Mock Agent ID bytecode before registry deployment: $AGENT_ID"
+          MOCK_CODE="0x"
+          for attempt in $(seq 1 12); do
+            MOCK_CODE="$(cast code "$AGENT_ID" --rpc-url "$BSC_TESTNET_RPC_URL")"
+            if [ "$MOCK_CODE" != "0x" ]; then
+              echo "Mock Agent ID bytecode visible on RPC (attempt $attempt)"
+              break
+            fi
+            echo "Mock Agent ID not visible yet; retrying in 5 seconds (attempt $attempt/12)"
+            sleep 5
+          done
+          test "$MOCK_CODE" != "0x" || {
+            echo "Mock Agent ID has no bytecode on the configured RPC after 60 seconds: $AGENT_ID"
+            echo "Check the mock deployment transaction and try another official BNB testnet RPC."
+            exit 1
+          }
+          sleep 5
           DEPLOYER_ADDRESS="$(cast wallet address --private-key "$PRIVATE_KEY")"
           forge script script/DeployRegistry.s.sol:DeployRegistry \
             --rpc-url "$BSC_TESTNET_RPC_URL" --private-key "$PRIVATE_KEY" \
