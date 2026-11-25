@@ -48,7 +48,6 @@ jobs:
             echo "::error::Missing BSC_MAINNET_RPC_URL repository secret."
             exit 1
           }
-          cast wallet address --private-key 0x0000000000000000000000000000000000000000000000000000000000000001 >/dev/null
           cast code "$DEPLOYER_ADDRESS" --rpc-url "$BSC_MAINNET_RPC_URL" >/dev/null
           CHAIN_ID="$(cast chain-id --rpc-url "$BSC_MAINNET_RPC_URL")"
           echo "Connected chain ID: $CHAIN_ID"
