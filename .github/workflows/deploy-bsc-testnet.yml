@@ -64,7 +64,7 @@ jobs:
           test "$BALANCE" -gt 0 || { echo "Deployer has no tBNB for gas"; exit 1; }
           forge script script/DeployMockAgentID.s.sol:DeployMockAgentID \
             --rpc-url "$BSC_TESTNET_RPC_URL" --private-key "$PRIVATE_KEY" \
-            --sender "$DEPLOYER_ADDRESS" --broadcast
+            --sender "$DEPLOYER_ADDRESS" --broadcast --slow --legacy --with-gas-price 1000000000
           MOCK_AGENT_ID="$(jq -r '.address' deployments/97-mock-agent-id.json)"
           test -n "$MOCK_AGENT_ID" && test "$MOCK_AGENT_ID" != "null"
           MOCK_CODE="$(cast code "$MOCK_AGENT_ID" --rpc-url "$BSC_TESTNET_RPC_URL")"
@@ -83,7 +83,7 @@ jobs:
           DEPLOYER_ADDRESS="$(cast wallet address --private-key "$PRIVATE_KEY")"
           forge script script/DeployRegistry.s.sol:DeployRegistry \
             --rpc-url "$BSC_TESTNET_RPC_URL" --private-key "$PRIVATE_KEY" \
-            --sender "$DEPLOYER_ADDRESS" --broadcast
+            --sender "$DEPLOYER_ADDRESS" --broadcast --slow --legacy --with-gas-price 1000000000
 
       - name: Deploy Sentra sandbox contracts
         env:
@@ -94,7 +94,7 @@ jobs:
           DEPLOYER_ADDRESS="$(cast wallet address --private-key "$PRIVATE_KEY")"
           forge script script/DeploySandboxes.s.sol:DeploySandboxes \
             --rpc-url "$BSC_TESTNET_RPC_URL" --private-key "$PRIVATE_KEY" \
-            --sender "$DEPLOYER_ADDRESS" --broadcast
+            --sender "$DEPLOYER_ADDRESS" --broadcast --slow --legacy --with-gas-price 1000000000
 
       - name: Publish deployment addresses
         uses: actions/upload-artifact@v4
