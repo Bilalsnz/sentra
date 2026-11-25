@@ -1,0 +1,124 @@
+name: bsc-mainnet-readiness
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_checks:
+        description: "Run READ-ONLY BNB Smart Chain mainnet readiness checks (no transactions will be broadcast)"
+        required: true
+        type: choice
+        default: "NO"
+        options:
+          - "NO"
+          - "YES_RUN_READ_ONLY_CHECKS"
+      deployer_address:
+        description: "Public address intended to deploy the registry (never provide a private key)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  readiness:
+    name: Verify BNB mainnet configuration (read-only)
+    if: ${{ inputs.confirm_checks == 'YES_RUN_READ_ONLY_CHECKS' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Validate inputs and BNB mainnet RPC
+        env:
+          BSC_MAINNET_RPC_URL: ${{ secrets.BSC_MAINNET_RPC_URL }}
+          DEPLOYER_ADDRESS: ${{ inputs.deployer_address }}
+        run: |
+          set -euo pipefail
+          test -n "$BSC_MAINNET_RPC_URL" || {
+            echo "::error::Missing BSC_MAINNET_RPC_URL repository secret."
+            exit 1
+          }
+          cast wallet address --private-key 0x0000000000000000000000000000000000000000000000000000000000000001 >/dev/null
+          cast code "$DEPLOYER_ADDRESS" --rpc-url "$BSC_MAINNET_RPC_URL" >/dev/null
+          CHAIN_ID="$(cast chain-id --rpc-url "$BSC_MAINNET_RPC_URL")"
+          echo "Connected chain ID: $CHAIN_ID"
+          test "$CHAIN_ID" = "56" || {
+            echo "::error::Refusing to continue: expected BNB Smart Chain mainnet (56)."
+            exit 1
+          }
+          echo "Confirmed deployer address: $DEPLOYER_ADDRESS"
+          BALANCE="$(cast balance "$DEPLOYER_ADDRESS" --rpc-url "$BSC_MAINNET_RPC_URL")"
+          echo "Deployer BNB balance (wei): $BALANCE"
+          test "$BALANCE" -gt 0 || {
+            echo "::error::The proposed deployer address has no BNB for gas."
+            exit 1
+          }
+
+      - name: Verify official Agent ID contract on mainnet
+        env:
+          BSC_MAINNET_RPC_URL: ${{ secrets.BSC_MAINNET_RPC_URL }}
+        run: |
+          set -euo pipefail
+          AGENT_ID="0x60B9262456dE011F7d15a54CdD8c48baaa8B022F"
+          CODE="$(cast code "$AGENT_ID" --rpc-url "$BSC_MAINNET_RPC_URL")"
+          test "$CODE" != "0x" || {
+            echo "::error::Official Agent ID address has no bytecode on this RPC."
+            exit 1
+          }
+          NAME="$(cast call "$AGENT_ID" "name()(string)" --rpc-url "$BSC_MAINNET_RPC_URL")"
+          SYMBOL="$(cast call "$AGENT_ID" "symbol()(string)" --rpc-url "$BSC_MAINNET_RPC_URL")"
+          echo "Agent ID name: $NAME"
+          echo "Agent ID symbol: $SYMBOL"
+          test "$NAME" = "SPACE ID Agent ID" || {
+            echo "::error::Unexpected Agent ID name; stop and investigate."
+            exit 1
+          }
+          test "$SYMBOL" = "AI" || {
+            echo "::error::Unexpected Agent ID symbol; stop and investigate."
+            exit 1
+          }
+          # Exercise the exact read-only interface Sentra relies on.
+          BALANCE="$(cast call "$AGENT_ID" "balanceOf(address)(uint256)" "0x000000000000000000000000000000000000dEaD" --rpc-url "$BSC_MAINNET_RPC_URL")"
+          echo "balanceOf interface response (burn address): $BALANCE"
+
+      - name: Run formatting, build, and complete contract tests
+        run: |
+          set -euo pipefail
+          forge fmt --check
+          forge build --sizes
+          forge test -vvv
+
+      - name: Simulate registry deployment without broadcasting
+        env:
+          BSC_MAINNET_RPC_URL: ${{ secrets.BSC_MAINNET_RPC_URL }}
+          DEPLOYER_ADDRESS: ${{ inputs.deployer_address }}
+        run: |
+          set -euo pipefail
+          # Deliberately omit --broadcast and do not load any private key.
+          # This is a simulation only; it cannot submit a transaction.
+          forge script script/DeployRegistry.s.sol:DeployRegistry \
+            --rpc-url "$BSC_MAINNET_RPC_URL" \
+            --sender "$DEPLOYER_ADDRESS" \
+            -vvvv
+
+      - name: Confirm sandbox deployment scripts remain testnet-only
+        run: |
+          set -euo pipefail
+          grep -q 'block.chainid == 97' script/DeploySandboxes.s.sol
+          grep -q 'block.chainid == 97' script/DeployMockAgentID.s.sol
+          echo "Sandbox and mock Agent ID deployment scripts are guarded for chain 97 only."
+
+      - name: Final safety summary
+        run: |
+          echo "Readiness checks completed. NO TRANSACTIONS WERE BROADCAST."
+          echo "This workflow does not deploy contracts, verify explorer source, or change Vercel configuration."
