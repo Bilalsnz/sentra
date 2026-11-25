@@ -10,7 +10,7 @@ contract DeployRegistry is Script {
     function run() external returns (SentraRegistry registry) {
         address agentId;
         if (block.chainid == 56) {
-            agentId = vm.envOr("AGENT_ID", BSC_AGENT_ID);
+            // Production must always use the official Agent ID contract. No override is allowed.\n            agentId = BSC_AGENT_ID;
         } else if (block.chainid == 97) {
             // Testnet must explicitly use the testnet mock. Never silently use mainnet Agent ID.
             agentId = vm.envAddress("AGENT_ID");
